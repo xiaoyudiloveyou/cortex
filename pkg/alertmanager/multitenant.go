@@ -175,8 +175,6 @@ func (cfg *MultitenantAlertmanagerConfig) RegisterFlags(f *flag.FlagSet) {
 type MultitenantAlertmanager struct {
 	cfg *MultitenantAlertmanagerConfig
 
-	peer *cluster.Peer
-
 	configsAPI configs_client.AlertManagerConfigsAPI
 
 	// The fallback config is stored as a string and parsed every time it's needed
@@ -192,6 +190,8 @@ type MultitenantAlertmanager struct {
 
 	latestConfig configs.ID
 	latestMutex  sync.RWMutex
+
+	peer *cluster.Peer
 
 	stop chan struct{}
 	done chan struct{}
@@ -249,11 +249,11 @@ func NewMultitenantAlertmanager(cfg *MultitenantAlertmanagerConfig) (*Multitenan
 
 	am := &MultitenantAlertmanager{
 		cfg:            cfg,
-		peer:           peer,
 		configsAPI:     configsAPI,
 		fallbackConfig: string(fallbackConfig),
 		cfgs:           map[string]configs.Config{},
 		alertmanagers:  map[string]*Alertmanager{},
+		peer:           peer,
 		stop:           make(chan struct{}),
 		done:           make(chan struct{}),
 	}
@@ -433,9 +433,9 @@ func (am *MultitenantAlertmanager) newAlertmanager(userID string, amConfig *amco
 	newAM, err := New(&Config{
 		UserID:      userID,
 		DataDir:     am.cfg.DataDir,
+		Logger:      util.Logger,
 		Peer:        am.peer,
 		PeerTimeout: am.cfg.peerTimeout,
-		Logger:      util.Logger,
 		Retention:   am.cfg.Retention,
 		ExternalURL: am.cfg.ExternalURL.URL,
 	})

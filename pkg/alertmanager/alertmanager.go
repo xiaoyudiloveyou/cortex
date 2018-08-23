@@ -34,9 +34,9 @@ type Config struct {
 	UserID string
 	// Used to persist notification logs and silences on disk.
 	DataDir     string
+	Logger      log.Logger
 	Peer        *cluster.Peer
 	PeerTimeout time.Duration
-	Logger      log.Logger
 	Retention   time.Duration
 	ExternalURL *url.URL
 }
