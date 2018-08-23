@@ -430,9 +430,11 @@ func (am *MultitenantAlertmanager) setConfig(userID string, config configs.Confi
 }
 
 func (am *MultitenantAlertmanager) newAlertmanager(userID string, amConfig *amconfig.Config) (*Alertmanager, error) {
-	newAM, err := New(am.peer, am.cfg.peerTimeout, &Config{
+	newAM, err := New(&Config{
 		UserID:      userID,
 		DataDir:     am.cfg.DataDir,
+		Peer:        am.peer,
+		PeerTimeout: am.cfg.peerTimeout,
 		Logger:      util.Logger,
 		Retention:   am.cfg.Retention,
 		ExternalURL: am.cfg.ExternalURL.URL,

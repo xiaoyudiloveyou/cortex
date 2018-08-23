@@ -34,6 +34,8 @@ type Config struct {
 	UserID string
 	// Used to persist notification logs and silences on disk.
 	DataDir     string
+	Peer        *cluster.Peer
+	PeerTimeout time.Duration
 	Logger      log.Logger
 	Retention   time.Duration
 	ExternalURL *url.URL
@@ -41,30 +43,26 @@ type Config struct {
 
 // An Alertmanager manages the alerts for one user.
 type Alertmanager struct {
-	cfg         *Config
-	api         *api.API
-	logger      log.Logger
-	nflog       *nflog.Log
-	silences    *silence.Silences
-	marker      types.Marker
-	alerts      *mem.Alerts
-	dispatcher  *dispatch.Dispatcher
-	inhibitor   *inhibit.Inhibitor
-	stop        chan struct{}
-	wg          sync.WaitGroup
-	router      *route.Router
-	peer        *cluster.Peer
-	peerTimeout time.Duration
+	cfg        *Config
+	api        *api.API
+	logger     log.Logger
+	nflog      *nflog.Log
+	silences   *silence.Silences
+	marker     types.Marker
+	alerts     *mem.Alerts
+	dispatcher *dispatch.Dispatcher
+	inhibitor  *inhibit.Inhibitor
+	stop       chan struct{}
+	wg         sync.WaitGroup
+	router     *route.Router
 }
 
 // New creates a new Alertmanager.
-func New(peer *cluster.Peer, peerTimeout time.Duration, cfg *Config) (*Alertmanager, error) {
+func New(cfg *Config) (*Alertmanager, error) {
 	am := &Alertmanager{
-		cfg:         cfg,
-		peer:        peer,
-		peerTimeout: peerTimeout,
-		logger:      log.With(cfg.Logger, "user", cfg.UserID),
-		stop:        make(chan struct{}),
+		cfg:    cfg,
+		logger: log.With(cfg.Logger, "user", cfg.UserID),
+		stop:   make(chan struct{}),
 	}
 
 	am.wg.Add(1)
@@ -101,8 +99,8 @@ func New(peer *cluster.Peer, peerTimeout time.Duration, cfg *Config) (*Alertmana
 	if err != nil {
 		return nil, fmt.Errorf("failed to create silences: %v", err)
 	}
-	if peer != nil {
-		c := peer.AddState("sil:"+cfg.UserID, am.silences, localRegistry)
+	if cfg.Peer != nil {
+		c := cfg.Peer.AddState("sil:"+cfg.UserID, am.silences, localRegistry)
 		am.silences.SetBroadcast(c.Broadcast)
 	}
 
@@ -125,7 +123,7 @@ func New(peer *cluster.Peer, peerTimeout time.Duration, cfg *Config) (*Alertmana
 			return am.dispatcher.Groups(matchers)
 		},
 		marker.Status,
-		peer,
+		cfg.Peer,
 		log.With(am.logger, "component", "api"),
 	)
 
@@ -187,7 +185,7 @@ func (am *Alertmanager) ApplyConfig(conf *config.Config) error {
 
 	am.inhibitor = inhibit.NewInhibitor(am.alerts, conf.InhibitRules, am.marker, log.With(am.logger, "component", "inhibitor"))
 
-	waitFunc := clusterWait(am.peer, am.peerTimeout)
+	waitFunc := clusterWait(am.cfg.Peer, am.cfg.PeerTimeout)
 	timeoutFunc := func(d time.Duration) time.Duration {
 		if d < notify.MinTimeout {
 			d = notify.MinTimeout
@@ -203,7 +201,7 @@ func (am *Alertmanager) ApplyConfig(conf *config.Config) error {
 		am.silences,
 		am.nflog,
 		am.marker,
-		am.peer,
+		am.cfg.Peer,
 		log.With(am.logger, "component", "pipeline"),
 	)
 	am.dispatcher = dispatch.NewDispatcher(
