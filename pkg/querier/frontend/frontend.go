@@ -59,7 +59,7 @@ type Config struct {
 	CacheResults            bool `yaml:"cache_results"`
 	CompressResponses       bool `yaml:"compress_responses"`
 	ResultsCacheConfig      `yaml:"results_cache"`
-	DownstreamURL                 string `yaml:"downstream"`
+	DownstreamURL           string `yaml:"downstream"`
 }
 
 // RegisterFlags adds the flags required to config this to the given FlagSet.
