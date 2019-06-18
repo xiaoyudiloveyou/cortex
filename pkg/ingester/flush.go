@@ -64,6 +64,10 @@ var (
 		Name: "cortex_ingester_flush_reasons",
 		Help: "Total number of series scheduled for flushing, with reasons.",
 	}, []string{"reason"})
+	droppedChunks = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "cortex_ingester_dropped_chunks_total",
+		Help: "Total number of chunks dropped from flushing because they have too few samples.",
+	})
 )
 
 // Flush triggers a flush of all the chunks and closes the flush queues.
@@ -333,6 +337,10 @@ func (i *Ingester) flushChunks(ctx context.Context, fp model.Fingerprint, metric
 
 	wireChunks := make([]chunk.Chunk, 0, len(chunkDescs))
 	for _, chunkDesc := range chunkDescs {
+		// Do not write chunks below the minimum chunk duration.
+		if chunkDesc.C.Len() < i.cfg.MinChunkLength {
+			continue
+		}
 		c := chunk.NewChunk(userID, fp, metric, chunkDesc.C, chunkDesc.FirstTime, chunkDesc.LastTime)
 		if err := c.Encode(); err != nil {
 			return err
@@ -349,6 +357,10 @@ func (i *Ingester) flushChunks(ctx context.Context, fp model.Fingerprint, metric
 	// Record statistsics only when actual put request did not return error.
 	for _, chunkDesc := range chunkDescs {
 		utilization, length, size := chunkDesc.C.Utilization(), chunkDesc.C.Len(), chunkDesc.C.Size()
+		if length < i.cfg.MinChunkLength {
+			droppedChunks.Inc()
+			continue
+		}
 		util.Event().Log("msg", "chunk flushed", "userID", userID, "fp", fp, "series", metric, "utilization", utilization, "length", length, "size", size, "firstTime", chunkDesc.FirstTime, "lastTime", chunkDesc.LastTime)
 		chunkUtilization.Observe(utilization)
 		chunkLength.Observe(float64(length))
